@@ -1,0 +1,34 @@
+{
+    "type": "record",
+    "name": "Product",
+    "fields": [
+      {
+        "name": "id",
+        "type": {
+          "type": "string",
+          "logicalType": "uuid"
+        }
+      },
+      {
+        "name": "unitPrice",
+        "type": {
+          "type": "bytes",
+          "logicalType": "decimal",
+          "precision": 19,
+          "scale": 2
+        }
+      },
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "description",
+        "type": "string"
+      },
+      {
+        "name": "category",
+        "type": "string"
+      }
+    ]
+}

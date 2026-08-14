@@ -1,0 +1,8 @@
+interface:
+  display_name: "Create Spring Boot Kafka + REST Microservice"
+  short_description: "Build Spring Boot Kafka + REST Microservices"
+  default_prompt: "Use $create-kafka-rest-microservice to create a tested Spring Boot REST and Kafka 
+     microservice from the domain schema (defined in config.toml)."
+
+policy:
+  allow_implicit_invocation: true
