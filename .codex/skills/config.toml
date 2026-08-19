@@ -1,16 +1,16 @@
 # The project name
-project_name = "microservice-products"
+project_name = "orders-service"
 
 # The root package path (e.g., net.wowdev.microservices.products)
-package_name = "net.wowdev.microservices.products"
+package_name = "net.wowdev.ecommerce.orders"
 
 # The Capitalized noun for the entity (e.g., Product)
-domain_object = "Product"
+domain_object = "Order"
 
 # The Kafka publishing topic name (e.g., product-change-topic)
-kafka_pub_topic = "products-topic"
+kafka_pub_topic = "orders-topic"
 
-kafka_bootstrap_servers = "localhost:9092, localhost:9094"
+kafka_bootstrap_servers = "localhost:9092"
 
 # The application server port (e.g., 9000)
 app_port = 9000

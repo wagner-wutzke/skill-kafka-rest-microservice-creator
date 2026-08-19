@@ -16,7 +16,8 @@ Read, in order:
 2. `.codex/config.toml`, when present; use it for project defaults.
 3. `pom.xml`, Java/source layout, tests, resources, and existing configuration.
 
-Request values override repository configuration. If a required value remains ambiguous, state the chosen value before
+Request values override repository configuration. 
+If a required value remains ambiguous, state the chosen value before
 editing. Use these variables:
 
 - `project_name`: Maven artifact and service name.
@@ -24,15 +25,8 @@ editing. Use these variables:
 - `domain_object`: singular Java entity name, such as `Product`; derive `domain_object_lower` for paths.
 - `app_port`: positive HTTP port; default `9000`.
 - `kafka_bootstrap_servers`: broker list; default `localhost:9092`.
-- `kafka_pub_topic`: publication topic; default `${domain_object_lower}s-topic`.
-
-Resolve `references/${domain_object_lower}-model.avsc` from this skill directory. If it is missing or invalid JSON/Avro,
-stop and report the problem; never invent a schema. Validate its record name, namespace, fields, logical types,
-nullability, defaults, and decimal precision/scale before mapping it. Preserve the contract exactly. Copy it to the
-build's configured Avro source directory only when the repository's build requires that, and compare the copies.
-
-Record whether the project is new or existing. Never delete source, tests, generated files, local database files, or
-unrelated untracked files to make generation easier. On reruns, reconcile only the requested layers.
+- `kafka_pub_topic`: publication topic; default `${domain_object_lower}-changes-topic`.
+- `kafka_sub_topic`: subscription topic; default `${domain_object_lower}-changes-topic`.
 
 ## 2. Build and project structure
 
@@ -40,39 +34,38 @@ Use Maven and the repository's Java/Spring Boot versions. For a new service, use
 
 ```text
 ${package_name}
-├── ${domain_object}Application.java
-├── config/                 # Kafka, persistence, auditing, and properties
+├── ${domain_object}sServiceApplication.java
+├── config/                 # Kafka, Jackson, persistence, auditing, and properties
 ├── controller/             # REST endpoints and HTTP error mapping
-├── domain/                 # JPA entities only
-├── dto/                    # validated request/response types
-├── mapper/                 # entity/DTO/Avro conversions
 ├── messaging/              # producer, consumer, and event types
 ├── repository/
 └── service/
 ```
 
+Maven Properties to be used:
+- java.version: 21
+- jacoco.version: 0.8.13
+- jackson.jsr310.version: 2.20.1
+- spring-boot-starter-parent: 4.1.0
+
+Maven project identification
+- groupId: `net.wowdev.ecommerce`
+- artifactId: `${domain_object}s-service`
+- version: 1.0.0
+- name `${domain_object}s-service`
+- description: `${domain_object}s-service` REST and Kafka microservice.
+
 Preserve compatible dependencies and annotation-processor configuration already present. For a new project, include
-Spring Web, Data JPA, Validation, H2, Spring Kafka, Avro, MapStruct, Lombok when appropriate, and test dependencies.
+Spring Web, Data JPA, Validation, H2, Spring Kafka, Lombok and test dependencies.
 Configure Avro generation during `generate-sources` or the existing equivalent and MapStruct annotation processing.
 Do not add versions or dependencies without checking the current `pom.xml`; use stable versions compatible with the
 project rather than blindly selecting “latest”.
 
-## 3. Domain, DTOs, and persistence
+Add a maven dependency to `net.wowdev.ecommerce:domain:latest` in the `pom.xml`. 
+It contains all domain class definitions: Entities, DTOs and Mappers.
 
-- Create `${domain_object}` with `UUID id`, `createdAt`, and `modifiedAt` when those fields fit the contract.
-- Use `@Id`/`@GeneratedValue` and Spring Data auditing (`@CreatedDate`, `@LastModifiedDate`) when timestamps are
-  application-managed.
-- Map every schema field deliberately, including UUID, decimal, logical, nullable, and collection types. Use explicit
-  column precision/scale where needed.
-- Add `${domain_object}Repository extends JpaRepository<${domain_object}, UUID>`.
-- Keep entities and generated Avro records out of REST APIs.
-- Use separate validated request and response DTOs; do not accept client-controlled IDs or audit timestamps unless the
-  contract requires them.
-- Use one mapper component for entity/DTO and entity/Avro conversion. Instantiate generated Avro records with
-  `.newBuilder()...build()`; construct DTOs/entities using the project's established style.
-- Prefer constructor injection, Lombok for `@NoArgsConstructor`, `@RequiredArgsConstructor`, and readable Java formatting.
 
-## 4. REST API
+## 3. REST API
 
 Create `${package_name}.controller.${domain_object}Controller` at `/api/v1/${domain_object_lower}s` with:
 
@@ -85,26 +78,30 @@ Create `${package_name}.controller.${domain_object}Controller` at `/api/v1/${dom
 Use `@Valid`, explicit constraints, consistent 400 responses, and `ProblemDetail` or the repository's established
 equivalent for 404 and other errors. Validate page parameters and test valid, invalid, missing, and update paths.
 
-## 5. Kafka and configuration
 
-- Keep broker addresses, topics, consumer groups, Schema Registry URL, database settings, and credentials in
-  `application.yml` or configuration properties. Never hardcode them in annotations or business logic.
-- Configure a producer for the generated Avro event, using the entity UUID as the stable key and
-  `enable.idempotence=true`, `acks=all`, and bounded retries (for example `3`). Do not combine idempotence with
+## 4. Kafka and configuration
+
+- Keep broker addresses, topics, consumer groups, database settings, and credentials in
+  `application.yml`. Never hardcode them in annotations or business logic.
+- Configure a Producer for the change events on domain objects, using the entity UUID as the stable key and
+  `enable.idempotence=true`, `acks=all`, and bounded retries `5`. Do not combine idempotence with
   `acks=1`.
 - Do not publish before the database commit. Prefer an application event handled by
   `@TransactionalEventListener(phase = AFTER_COMMIT)` or use an explicitly documented transactional outbox. Explain
   the reliability tradeoff; an asynchronous send failure is not a successful business operation.
 - Configure an explicit externalized consumer group, safe/idempotent processing, and a bounded `DefaultErrorHandler`
   with `DeadLetterPublishingRecoverer` or the version-compatible equivalent. Document the DLQ naming convention.
+- Configure a Consumer for receiving events on the configured `kafka_sub_topic`. Leave its implementation open.
 - Add producer and consumer unit tests that do not require a live broker. Use embedded Kafka/Testcontainers only for an
   explicitly requested integration test.
-- Ensure the event payload and topic follow the repository's AsyncAPI specification as well as the Avro schema; inspect
-  both when they disagree and report the conflict before changing routing.
+
+
+## 5. H2 Database
 
 Configure local H2 as file-based (for example `jdbc:h2:file:./data/${domain_object_lower}s-db`), expose `/h2-console`
 only as appropriate for local development, disable SQL logging by default, and set `server.port` with an environment
 override. Keep secrets out of source control.
+
 
 ## 6. Code formatting requirements
 
@@ -114,6 +111,7 @@ override. Keep secrets out of source control.
 - Use one import per line, remove unused imports, and keep imports organized by the project formatter.
 - Add concise Javadoc only when public API behavior is non-obvious or required by the repository's quality checks.
 - Keep Java readable: avoid one-line classes, methods, or multiple unrelated statements separated by semicolons.
+
 
 ## 7. Code style and safety
 
